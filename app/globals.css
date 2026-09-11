@@ -1,0 +1,203 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root, [data-theme="dark"] {
+  --surface-rgb: 10 14 20;
+  --surface-raised-rgb: 18 24 34;
+  --surface-overlay-rgb: 26 34 48;
+  --text-primary-rgb: 209 212 220;
+  --text-secondary-rgb: 120 123 134;
+  --text-muted-rgb: 93 96 107;
+  --accent-green-rgb: 0 230 118;
+  --accent-gold: #00c978;
+  --accent-gold-rgb: 0 201 120;
+  --accent-gold-hover-rgb: 0 170 100;
+  --status-win: #00e676;
+  --status-win-rgb: 0 230 118;
+  --status-loss: #ff5252;
+  --status-loss-rgb: 255 82 82;
+  --status-warn: #ffb300;
+  --status-warn-rgb: 255 179 0;
+  --status-info: #448aff;
+  --status-info-rgb: 68 138 255;
+  --text-primary: rgb(var(--text-primary-rgb));
+  --text-muted: rgb(var(--text-muted-rgb));
+  --border: rgba(255, 255, 255, 0.06);
+  --border-light: rgba(255, 255, 255, 0.10);
+  --shadow-card: 0 2px 8px rgba(0,0,0,0.3), 0 1px 3px rgba(0,0,0,0.15);
+  --shadow-card-hover: 0 8px 32px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.2), 0 0 0 1px rgba(0,201,120,0.12);
+  --shadow-card-glow: 0 4px 20px rgba(0,201,120,0.2), 0 0 60px rgba(0,201,120,0.06);
+  --glass-bg: rgba(18, 24, 34, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.06);
+  --glass-shine: rgba(0, 201, 120, 0.04);
+  --profit: #00e676;
+  --loss: #ff5252;
+  --gold: #00c978;
+  --card: #121822;
+  --bg-gradient: linear-gradient(180deg, #0a0e14 0%, #121822 50%, #0a0e14 100%);
+  --bg-radial: radial-gradient(ellipse at 50% 0%, rgba(0,201,120,0.03) 0%, transparent 60%);
+}
+
+[data-theme="light"] {
+  --surface-rgb: 245 247 250;
+  --surface-raised-rgb: 255 255 255;
+  --surface-overlay-rgb: 238 240 244;
+  --text-primary-rgb: 26 29 43;
+  --text-secondary-rgb: 107 122 143;
+  --text-muted-rgb: 154 168 185;
+  --accent-gold: #006633;
+  --accent-gold-rgb: 0 102 51;
+  --accent-gold-hover-rgb: 0 80 38;
+  --accent-green-rgb: 0 168 84;
+  --status-win: #00a854;
+  --status-win-rgb: 0 168 84;
+  --status-loss: #d32f2f;
+  --status-loss-rgb: 211 47 47;
+  --status-warn: #f57c00;
+  --status-warn-rgb: 245 124 0;
+  --status-info: #2979ff;
+  --status-info-rgb: 41 121 255;
+  --text-primary: rgb(var(--text-primary-rgb));
+  --text-muted: rgb(var(--text-muted-rgb));
+  --border: rgba(0, 0, 0, 0.06);
+  --border-light: rgba(0, 0, 0, 0.10);
+  --shadow-card: 0 2px 8px rgba(0,0,0,0.05), 0 1px 3px rgba(0,0,0,0.03);
+  --shadow-card-hover: 0 8px 24px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04), 0 0 0 1px rgba(0,102,51,0.10);
+  --shadow-card-glow: 0 4px 20px rgba(0,102,51,0.12), 0 0 60px rgba(0,102,51,0.03);
+  --glass-bg: rgba(255, 255, 255, 0.70);
+  --glass-border: rgba(0, 0, 0, 0.06);
+  --glass-shine: rgba(255, 255, 255, 0.50);
+  --profit: #00a854;
+  --loss: #d32f2f;
+  --gold: #006633;
+  --card: #ffffff;
+  --bg-gradient: linear-gradient(135deg, #f5f7fa 0%, #eef1f6 25%, #e8ecf2 50%, #f0f2f6 75%, #f5f7fa 100%);
+  --bg-radial: radial-gradient(ellipse at 50% 0%, rgba(0,102,51,0.03) 0%, transparent 60%);
+}
+
+html { scroll-behavior: smooth; scrollbar-width: thin; }
+body {
+  background: var(--bg-gradient), var(--bg-radial), rgb(var(--surface-rgb));
+  @apply text-text-primary antialiased;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  transition: background 0.4s ease, color 0.3s ease;
+  min-height: 100vh;
+}
+.font-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+code, .quant { font-family: 'JetBrains Mono', monospace; }
+/* subtle animated grain behind */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(600px 400px at 20% 0%, rgba(var(--accent-gold-rgb),0.06), transparent 70%),
+              radial-gradient(800px 600px at 90% 30%, rgba(var(--accent-gold-rgb),0.04), transparent 70%);
+  animation: drift 24s ease-in-out infinite alternate;
+  z-index: -1;
+}
+@keyframes drift { 0% { transform: translateX(0) scale(1); opacity: 1; } 100% { transform: translateX(-16px) scale(1.02); opacity: 0.9; } }
+* { @apply border-surface-border; }
+::selection { @apply bg-accent-gold/25 text-white; }
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(0,201,120,0.15); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0,201,120,0.3); }
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.card {
+  @apply rounded-card p-5 transition-all duration-300;
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  position: relative;
+  overflow: hidden;
+}
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--glass-shine), transparent);
+  pointer-events: none;
+}
+.card:hover { border-color: rgba(var(--accent-gold-rgb), 0.2); box-shadow: var(--shadow-card-hover); }
+.card-glow {
+  @apply rounded-card p-5;
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(var(--accent-gold-rgb), 0.15);
+  box-shadow: var(--shadow-card-glow);
+  position: relative; overflow: hidden;
+}
+.card-glow::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(var(--accent-gold-rgb), 0.3), transparent);
+  pointer-events: none;
+}
+.btn {
+  @apply inline-flex items-center justify-center gap-2 font-semibold rounded-btn px-5 py-2.5 text-sm active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed;
+  transition: all 0.2s ease 0.04s;
+  position: relative; overflow: hidden; isolation: isolate;
+}
+.btn::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.12) 45%, rgba(255,255,255,0.18) 50%, rgba(255,255,255,0.12) 55%, transparent 70%);
+  background-size: 200% 100%; background-position: 150% 0;
+  transition: background-position 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  pointer-events: none; z-index: 1;
+}
+.btn:hover::after { background-position: -50% 0; }
+.btn-primary {
+  @apply btn;
+  background: linear-gradient(135deg, var(--accent-gold), rgb(var(--accent-gold-hover-rgb)));
+  color: #ffffff;
+  border: 1px solid rgb(var(--accent-gold-rgb));
+}
+.btn-primary:hover {
+  background: var(--accent-gold);
+  box-shadow: 0 4px 20px rgba(var(--accent-gold-rgb), 0.3), 0 0 40px rgba(var(--accent-gold-rgb), 0.1);
+}
+.btn-primary::after {
+  background: linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.18) 45%, rgba(255,255,255,0.25) 50%, rgba(255,255,255,0.18) 55%, transparent 70%);
+  background-size: 200% 100%; background-position: 150% 0;
+}
+.btn-secondary {
+  @apply btn;
+  background: rgb(var(--surface-overlay-rgb));
+  color: rgb(var(--text-primary-rgb));
+  border: 1px solid rgb(var(--text-primary-rgb));
+}
+.btn-secondary:hover {
+  background: rgb(var(--surface-overlay-rgb));
+  border-color: rgb(var(--accent-gold-rgb));
+  box-shadow: 0 0 0 1px rgba(var(--accent-gold-rgb), 0.15);
+}
+.btn-ghost {
+  @apply btn bg-transparent text-text-secondary hover:text-text-primary;
+  border: 1px solid transparent;
+}
+.btn-ghost:hover { background: var(--glass-bg); border-color: var(--glass-border); }
+.badge {
+  @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-pill text-xs font-semibold;
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+}
+.badge-win { @apply badge bg-status-win/10 text-status-win border border-status-win/15; }
+.badge-loss { @apply badge bg-status-loss/10 text-status-loss border border-status-loss/15; }
+.badge-warn { @apply badge bg-status-warn/10 text-status-warn border border-status-warn/15; }
+.badge-info { @apply badge bg-status-info/10 text-status-info border border-status-info/15; }
+.badge-gold { @apply badge bg-accent-gold/15 text-accent-gold border border-accent-gold/20; }
+.scroll-reveal {
+  opacity: 0; transform: translateY(24px);
+  transition: opacity 0.6s cubic-bezier(0.22, 1, 0.36, 1), transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.scroll-reveal.visible { opacity: 1; transform: translateY(0); }
+@media (max-width: 768px) { .card { @apply p-4; } }

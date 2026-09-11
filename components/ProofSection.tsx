@@ -1,0 +1,318 @@
+"use client"
+import { useState, useRef, useEffect } from 'react'
+import { motion } from 'framer-motion'
+import { ExternalLink, Lock, ChevronLeft, ChevronRight } from 'lucide-react'
+import { demoTweets, propTweets } from '../data/tweets'
+
+function fmtR(v?: number) {
+  if (v === undefined || v === null || v === 0) return '—'
+  return `${v > 0 ? '+' : ''}${v.toFixed(1)}R`
+}
+
+function badgeCls(result: string) {
+  if (result === 'win' || result === 'win_milestone' || result === 'partial_win') return 'badge-win'
+  if (result === 'loss') return 'badge-loss'
+  if (result === 'info') return 'badge-info'
+  return 'badge-warn'
+}
+
+function LedgerCarousel({ data, showX, liveAccount }: { data: typeof demoTweets; showX: boolean; liveAccount?: 'demo' | 'prop' }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [canLeft, setCanLeft] = useState(false)
+  const [canRight, setCanRight] = useState(true)
+  const [liveData, setLiveData] = useState<any[] | null>(null)
+
+  const updateArrows = () => {
+    const el = ref.current
+    if (!el) return
+    setCanLeft(el.scrollLeft > 4)
+    setCanRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4)
+  }
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const onScroll = () => updateArrows()
+    el.addEventListener('scroll', onScroll)
+    updateArrows()
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [])
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    let paused = false
+    const onEnter = () => (paused = true)
+    const onLeave = () => (paused = false)
+    el.addEventListener('mouseenter', onEnter)
+    el.addEventListener('mouseleave', onLeave)
+    const id = setInterval(() => {
+      if (paused || !el) return
+      const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 8
+      if (atEnd) {
+        el.scrollTo({ left: 0, behavior: 'smooth' })
+      } else {
+        el.scrollBy({ left: 308, behavior: 'smooth' })
+      }
+    }, 5000)
+    return () => {
+      clearInterval(id)
+      el.removeEventListener('mouseenter', onEnter)
+      el.removeEventListener('mouseleave', onLeave)
+    }
+  }, [])
+
+  // fetch live trades for more detail when liveAccount is set
+  useEffect(() => {
+    if (!liveAccount) return
+    let mounted = true
+    ;(async () => {
+      try {
+        const { db } = await import('../lib/firebase')
+        const { collection, query, where, orderBy, limit, getDocs } = await import('firebase/firestore')
+        const q = query(collection(db, 'trades'), where('accountId', '==', liveAccount), orderBy('timestamp', 'desc'), limit(40))
+        const snap = await getDocs(q)
+        const rows = snap.docs.map(d => {
+          const v: any = d.data()
+          const entry = Number(v.entryPrice || 0)
+          const exit = Number(v.exitPrice || 0)
+          const sl = Number(v.stopLoss || 0)
+          const risk = Math.abs(entry - sl) || 1
+          const isLong = (v.direction || 'LONG') === 'LONG'
+          const rr = sl ? (isLong ? (exit - entry) / risk : (entry - exit) / risk) : Number(v.riskRewardRatio || 0)
+          return {
+            id: d.id,
+            date: (v.timestamp?.toDate ? v.timestamp.toDate().toISOString().slice(0,10) : String(v.timestamp||'').slice(0,10)) || '',
+            signalNo: undefined,
+            result: v.result || (rr>0?'win':'loss'),
+            rr,
+            pnl: Number(v.pnl || 0),
+            caption: `${v.direction || ''} ${Number(v.entryPrice||0).toFixed(2)} → ${Number(v.exitPrice||0).toFixed(2)} · SL ${Number(v.stopLoss||0).toFixed(2)} · TP ${Number(v.takeProfit||0).toFixed(2)}`,
+            tweetUrl: '',
+            entry, exit, sl, tp: Number(v.takeProfit||0), lot: Number(v.entrySize||0.01),
+          }
+        })
+        if (mounted && rows.length) setLiveData(rows)
+      } catch {}
+    })()
+    return () => { mounted = false }
+  }, [liveAccount])
+
+  const scroll = (dir: number) => ref.current?.scrollBy({ left: dir * 320, behavior: 'smooth' })
+  const display = liveData && liveData.length ? liveData : data
+
+  return (
+    <div className="relative">
+      <button
+        aria-label="Previous"
+        onClick={() => scroll(-1)}
+        disabled={!canLeft}
+        className="hidden md:flex absolute -left-3 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full border bg-white shadow-card items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed"
+        style={{ borderColor: 'var(--glass-border)' }}
+      >
+        <ChevronLeft className="w-4 h-4" />
+      </button>
+      <button
+        aria-label="Next"
+        onClick={() => scroll(1)}
+        disabled={!canRight}
+        className="hidden md:flex absolute -right-3 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full border bg-white shadow-card items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed"
+        style={{ borderColor: 'var(--glass-border)' }}
+      >
+        <ChevronRight className="w-4 h-4" />
+      </button>
+
+      <div ref={ref} className="hidden md:flex gap-3 overflow-x-auto no-scrollbar snap-x snap-mandatory pb-1 scroll-smooth">
+        {display.map((t: any, i: number) => {
+          const isWin = (t.rr ?? 0) > 0 || t.result === 'win_milestone' || t.result === 'partial_win'
+          const isLoss = (t.rr ?? 0) < 0 || t.result === 'loss'
+          const accent = isWin ? 'var(--status-win)' : isLoss ? 'var(--status-loss)' : 'var(--accent-gold)'
+          const title = t.caption?.split('·')[0]?.trim() || t.caption
+          const detail = t.caption?.split('·').slice(1).join('·').trim()
+          const hasLevels = t.entry !== undefined
+          return (
+            <motion.div
+              key={t.id}
+              initial={{ opacity: 0, y: 10 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: i * 0.02 }}
+              whileHover={{ y: -3 }}
+              className="min-w-[300px] max-w-[300px] snap-start rounded-xl border flex flex-col justify-between overflow-hidden group hover:shadow-card transition-all"
+              style={{ background: 'rgb(var(--surface-overlay-rgb))', borderColor: 'var(--glass-border)' }}
+            >
+              <div className="h-1 w-full" style={{ background: accent }} />
+              <div className="p-4 flex flex-col flex-1">
+                <div className="flex items-center justify-between">
+                  <span className={`badge font-mono text-[10px] ${badgeCls(t.result)}`}>{t.result === 'win_milestone' ? 'MILESTONE' : String(t.result).toUpperCase()}</span>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-black/[0.04] border" style={{ borderColor: 'var(--glass-border)' }}>
+                    {t.signalNo ? `#${String(t.signalNo).padStart(2, '0')}` : '—'} · {t.date}
+                  </span>
+                </div>
+                <div className="mt-2">
+                  <p className="text-sm font-semibold leading-tight text-text-primary group-hover:text-accent-gold transition line-clamp-1">{title}</p>
+                  {detail && <p className="text-[11px] font-mono text-text-muted mt-1 line-clamp-1">{detail}</p>}
+                  {hasLevels && t.entry ? (
+                    <div className="mt-2 grid grid-cols-3 gap-1.5 text-[10px] font-mono">
+                      <span className="rounded px-1.5 py-1 bg-black/[0.03] border text-center" style={{ borderColor: 'var(--glass-border)' }}>E {Number(t.entry).toFixed(2)}</span>
+                      <span className="rounded px-1.5 py-1 bg-black/[0.03] border text-center" style={{ borderColor: 'var(--glass-border)' }}>X {Number(t.exit ?? t.tp ?? 0).toFixed(2)}</span>
+                      <span className="rounded px-1.5 py-1 bg-black/[0.03] border text-center" style={{ borderColor: 'var(--glass-border)' }}>SL {Number(t.sl ?? t.stopLoss ?? 0).toFixed(2)}</span>
+                    </div>
+                  ) : null}
+                </div>
+                <div className="mt-3 flex items-end justify-between">
+                  <div>
+                    <p className="text-[10px] font-mono tracking-[0.14em] text-text-muted uppercase">RR</p>
+                    <p className="text-[26px] font-bold font-mono leading-none tracking-tight" style={{ color: accent }}>
+                      {fmtR(t.rr)}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[11px] font-mono font-medium" style={{ color: (t.pnl ?? 0) >= 0 ? 'var(--status-win)' : 'var(--status-loss)' }}>
+                      {t.pnl !== undefined && t.pnl !== 0 ? `${t.pnl > 0 ? '+' : ''}$${Number(t.pnl).toFixed(2)}` : '—'}
+                    </p>
+                    <p className="text-[10px] font-mono text-text-muted">{t.lot ? `${Number(t.lot).toFixed(2)} lot` : '1–2% risk'}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="px-4 py-2.5 flex items-center justify-between border-t" style={{ borderColor: 'var(--glass-border)', background: 'rgba(var(--text-primary-rgb),0.02)' }}>
+                <span className="text-[10px] font-mono text-text-muted">1–2% scales with size</span>
+                {showX && t.tweetUrl ? (
+                  <a href={t.tweetUrl} target="_blank" rel="noopener" className="text-[11px] font-semibold font-mono inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-accent-gold text-white hover:opacity-90 transition">
+                    View <ExternalLink className="w-3 h-3" />
+                  </a>
+                ) : (
+                  <span className="text-[10px] font-mono text-text-muted inline-flex items-center gap-1"><Lock className="w-3 h-3" /> Private</span>
+                )}
+              </div>
+            </motion.div>
+          )
+        })}
+      </div>
+
+      <div className="md:hidden max-h-[460px] overflow-y-auto no-scrollbar space-y-2.5 pr-1">
+        {(liveData && liveData.length ? liveData : data).map((t: any) => {
+          const isWin = (t.rr ?? 0) > 0 || t.result === 'win_milestone' || t.result === 'partial_win'
+          const isLoss = (t.rr ?? 0) < 0 || t.result === 'loss'
+          const accent = isWin ? 'var(--status-win)' : isLoss ? 'var(--status-loss)' : 'var(--accent-gold)'
+          const title = t.caption?.split('·')[0]?.trim() || t.caption
+          return (
+            <div key={t.id} className="rounded-xl border overflow-hidden" style={{ background: 'rgb(var(--surface-overlay-rgb))', borderColor: 'var(--glass-border)' }}>
+              <div className="h-1 w-full" style={{ background: accent }} />
+              <div className="p-3">
+                <div className="flex items-center gap-1.5">
+                  <span className={`badge font-mono text-[10px] px-1.5 py-0.5 ${badgeCls(t.result)}`}>{t.result === 'win_milestone' ? 'MILESTONE' : String(t.result).toUpperCase()}</span>
+                  <span className="text-[10px] font-mono text-text-muted">{t.date} · #{t.signalNo ?? '—'}</span>
+                  <span className="ml-auto text-[15px] font-bold font-mono" style={{ color: accent }}>{fmtR(t.rr)}</span>
+                </div>
+                <p className="text-xs font-semibold text-text-primary mt-1.5 line-clamp-1">{title}</p>
+                <div className="mt-1 flex items-center justify-between">
+                  <span className="text-[11px] font-mono text-text-muted">{t.pnl ? `${t.pnl > 0 ? '+' : ''}$${Number(t.pnl).toFixed(2)}` : ''} · {t.lot ? `${Number(t.lot).toFixed(2)} lot` : '1–2%'}</span>
+                  {showX && t.tweetUrl ? (
+                    <a href={t.tweetUrl} target="_blank" rel="noopener" className="w-7 h-7 rounded-full bg-accent-gold text-white flex items-center justify-center">
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  ) : (
+                    <span className="text-[10px] font-mono text-text-muted flex items-center gap-1"><Lock className="w-3 h-3" /> Private</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function PropWall() {
+  const [trades, setTrades] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    let mounted = true
+    async function load() {
+      try {
+        const { db } = await import('../lib/firebase')
+        const { collection, query, where, orderBy, limit, getDocs } = await import('firebase/firestore')
+        try {
+          const q = query(collection(db, 'trades'), where('accountId', '==', 'prop'), orderBy('timestamp', 'desc'), limit(30))
+          const snap = await getDocs(q)
+          const rows = snap.docs.map(d => {
+            const v: any = d.data()
+            const entry = Number(v.entryPrice || 0)
+            const exit = Number(v.exitPrice || 0)
+            const sl = Number(v.stopLoss || 0)
+            const risk = Math.abs(entry - sl) || 1
+            const isLong = (v.direction || 'LONG') === 'LONG'
+            const rr = sl ? (isLong ? (exit - entry) / risk : (entry - exit) / risk) : Number(v.riskRewardRatio || 0)
+            return { id: d.id, date: (v.timestamp?.toDate ? v.timestamp.toDate().toISOString().slice(0,10) : String(v.timestamp||'').slice(0,10)) || '', result: v.result || (rr>0?'win':'loss'), rr, pnl: Number(v.pnl||0), caption: `${v.direction || ''} ${entry.toFixed(2)} → ${exit.toFixed(2)}`, entry, exit, sl, tp: Number(v.takeProfit||0), lot: Number(v.entrySize||0.04) }
+          })
+          if (mounted && rows.length > 0) {
+            setTrades(rows)
+            setLoading(false)
+            return
+          }
+        } catch {}
+        if (mounted) {
+          setTrades(propTweets.map(t => ({ id: t.id, date: t.date, result: t.result, rr: t.rr, pnl: t.pnl, caption: t.caption, entry: 0, exit: 0, sl: 0, tp: 0, lot: 0.04 } as any)))
+          setLoading(false)
+        }
+      } catch {
+        if (mounted) setLoading(false)
+      }
+    }
+    load()
+    return () => { mounted = false }
+  }, [])
+
+  const displayTrades = trades.length ? trades : propTweets.map(t => ({ ...t, entry: 0, exit: 0, sl: 0, tp: 0, lot: 0.04 } as any))
+  if (loading) return <div className="py-8 text-center text-xs font-mono text-text-muted">Loading live ledger…</div>
+
+  return (
+    <div className="space-y-3">
+      <div className="hidden md:flex items-center gap-2 text-[10px] font-mono text-text-muted">
+        <span className="px-2 py-1 rounded bg-surface-overlay border" style={{ borderColor: 'var(--glass-border)' }}>Live account · private</span>
+        <span className="hidden sm:inline">· {displayTrades.length} trades · 1–2% risk · verified privately</span>
+      </div>
+      <LedgerCarousel data={displayTrades as any} showX={false} />
+      <p className="text-[11px] font-mono text-text-muted text-center">Trades verified privately — join private group for live screenshots</p>
+    </div>
+  )
+}
+
+export default function ProofSection() {
+  const [tab, setTab] = useState<'demo' | 'prop'>('demo')
+  return (
+    <section id="proof" className="max-w-6xl mx-auto px-4 py-6 scroll-reveal">
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <div>
+          <h2 className="text-lg font-bold tracking-tight text-text-primary">L2 Signals Trade Ledger</h2>
+          <p className="text-[11px] font-mono text-text-muted">Every trade · Every R · Every date</p>
+        </div>
+        <div className="flex items-center gap-1 p-1 rounded-full" style={{ background: 'rgb(var(--surface-overlay-rgb))', border: '1px solid var(--glass-border)' }}>
+          <button onClick={() => setTab('demo')} className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition ${tab === 'demo' ? 'bg-accent-gold text-white' : 'text-text-muted hover:text-text-primary'}`}>Demo</button>
+          <button onClick={() => setTab('prop')} className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition ${tab === 'prop' ? 'bg-accent-gold text-white' : 'text-text-muted hover:text-text-primary'}`}>Prop Live</button>
+        </div>
+      </div>
+
+      <div className="card p-4 md:p-5">
+        {tab === 'demo' ? (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-[10px] font-mono text-text-muted">
+              <span className="px-2 py-1 rounded bg-accent-gold/10 text-accent-gold border border-accent-gold/15">$100 → $1,007.41 · 37D</span>
+              <span className="hidden sm:inline">· live 31 trades · 1–2% risk · public on X</span>
+            </div>
+            <LedgerCarousel data={demoTweets} showX liveAccount="demo" />
+            <p className="text-[10px] font-mono text-text-muted text-center">Auto-scrolls every 5s · swipe or use arrows · RR highlighted so higher size scales profit</p>
+          </div>
+        ) : (
+          <PropWall />
+        )}
+
+        <div className="mt-4 flex justify-center">
+          <a href="https://t.me/l2signals" target="_blank" rel="noopener" className="text-xs font-medium px-5 py-2 rounded-full border hover:border-accent-gold transition" style={{ borderColor: 'var(--glass-border)' }}>Join Channel to see next trades →</a>
+        </div>
+      </div>
+    </section>
+  )
+}
