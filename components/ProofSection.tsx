@@ -62,18 +62,20 @@ function LedgerCarousel({ data, showX, liveAccount }: { data: typeof demoTweets;
     }
   }, [])
 
-  // fetch live trades for more detail when liveAccount is set
+  // fetch live trades for more detail when liveAccount is set — no composite index, filter in memory like l2signal_web
   useEffect(() => {
     if (!liveAccount) return
     let mounted = true
     ;(async () => {
       try {
         const { db } = await import('../lib/firebase')
-        const { collection, query, where, orderBy, limit, getDocs } = await import('firebase/firestore')
-        const q = query(collection(db, 'trades'), where('accountId', '==', liveAccount), orderBy('timestamp', 'desc'), limit(40))
+        const { collection, query, orderBy, limit, getDocs } = await import('firebase/firestore')
+        const q = query(collection(db, 'trades'), orderBy('timestamp', 'desc'), limit(80))
         const snap = await getDocs(q)
-        const rows = snap.docs.map(d => {
-          const v: any = d.data()
+        const rows = snap.docs.map(d => ({ id: d.id, v: d.data() as any }))
+          .filter(({ v }) => (v.accountId || 'demo') === liveAccount)
+          .slice(0, 40)
+          .map(({ id, v }) => {
           const entry = Number(v.entryPrice || 0)
           const exit = Number(v.exitPrice || 0)
           const sl = Number(v.stopLoss || 0)
@@ -81,7 +83,7 @@ function LedgerCarousel({ data, showX, liveAccount }: { data: typeof demoTweets;
           const isLong = (v.direction || 'LONG') === 'LONG'
           const rr = sl ? (isLong ? (exit - entry) / risk : (entry - exit) / risk) : Number(v.riskRewardRatio || 0)
           return {
-            id: d.id,
+            id,
             date: (v.timestamp?.toDate ? v.timestamp.toDate().toISOString().slice(0,10) : String(v.timestamp||'').slice(0,10)) || '',
             signalNo: undefined,
             result: v.result || (rr>0?'win':'loss'),
@@ -233,19 +235,22 @@ function PropWall() {
     async function load() {
       try {
         const { db } = await import('../lib/firebase')
-        const { collection, query, where, orderBy, limit, getDocs } = await import('firebase/firestore')
+        const { collection, query, orderBy, limit, getDocs } = await import('firebase/firestore')
         try {
-          const q = query(collection(db, 'trades'), where('accountId', '==', 'prop'), orderBy('timestamp', 'desc'), limit(30))
+          // no composite index — fetch then filter in memory
+          const q = query(collection(db, 'trades'), orderBy('timestamp', 'desc'), limit(80))
           const snap = await getDocs(q)
-          const rows = snap.docs.map(d => {
-            const v: any = d.data()
+          const rows = snap.docs.map(d => ({ id: d.id, v: d.data() as any }))
+            .filter(({ v }) => (v.accountId || 'demo') === 'prop')
+            .slice(0, 30)
+            .map(({ id, v }) => {
             const entry = Number(v.entryPrice || 0)
             const exit = Number(v.exitPrice || 0)
             const sl = Number(v.stopLoss || 0)
             const risk = Math.abs(entry - sl) || 1
             const isLong = (v.direction || 'LONG') === 'LONG'
             const rr = sl ? (isLong ? (exit - entry) / risk : (entry - exit) / risk) : Number(v.riskRewardRatio || 0)
-            return { id: d.id, date: (v.timestamp?.toDate ? v.timestamp.toDate().toISOString().slice(0,10) : String(v.timestamp||'').slice(0,10)) || '', result: v.result || (rr>0?'win':'loss'), rr, pnl: Number(v.pnl||0), caption: `${v.direction || ''} ${entry.toFixed(2)} → ${exit.toFixed(2)}`, entry, exit, sl, tp: Number(v.takeProfit||0), lot: Number(v.entrySize||0.04) }
+            return { id, date: (v.timestamp?.toDate ? v.timestamp.toDate().toISOString().slice(0,10) : String(v.timestamp||'').slice(0,10)) || '', result: v.result || (rr>0?'win':'loss'), rr, pnl: Number(v.pnl||0), caption: `${v.direction || ''} ${entry.toFixed(2)} → ${exit.toFixed(2)}`, entry, exit, sl, tp: Number(v.takeProfit||0), lot: Number(v.entrySize||0.04) }
           })
           if (mounted && rows.length > 0) {
             setTrades(rows)
