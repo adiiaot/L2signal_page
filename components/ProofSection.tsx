@@ -62,12 +62,39 @@ function LedgerCarousel({ data, showX, liveAccount }: { data: typeof demoTweets;
     }
   }, [])
 
-  // fetch live trades for more detail when liveAccount is set — no composite index, filter in memory like l2signal_web
+  // fetch live trades — API first (bypasses Firestore rules), fallback to direct Firestore
   useEffect(() => {
     if (!liveAccount) return
     let mounted = true
     ;(async () => {
       try {
+        const base = process.env.NEXT_PUBLIC_L2_WEB_API || 'https://l2signal-web.vercel.app';
+        try {
+          const r = await fetch(`${base}/api/trades?account=${liveAccount}&limit=80`, { cache: 'no-store' }).then(x=>x.json()).catch(()=>null);
+          if (r?.success && Array.isArray(r.trades) && r.trades.length) {
+            const rows = r.trades.slice(0,40).map((v:any) => {
+              const entry = Number(v.entryPrice || 0)
+              const exit = Number(v.exitPrice || 0)
+              const sl = Number(v.stopLoss || 0)
+              const risk = Math.abs(entry - sl) || 1
+              const isLong = (v.direction || 'LONG') === 'LONG'
+              const rr = sl ? (isLong ? (exit - entry) / risk : (entry - exit) / risk) : Number(v.riskRewardRatio || 0)
+              return {
+                id: v.id||v.tradeId,
+                date: (v.timestamp?.toDate ? v.timestamp.toDate().toISOString().slice(0,10) : String(v.timestamp||'').slice(0,10)) || '',
+                signalNo: undefined,
+                result: v.result || (rr>0?'win':'loss'),
+                rr,
+                pnl: Number(v.pnl || 0),
+                caption: `${v.direction || ''} ${Number(v.entryPrice||0).toFixed(2)} → ${Number(v.exitPrice||0).toFixed(2)} · SL ${Number(v.stopLoss||0).toFixed(2)} · TP ${Number(v.takeProfit||0).toFixed(2)}`,
+                tweetUrl: '',
+                entry, exit, sl, tp: Number(v.takeProfit||0), lot: Number(v.entrySize||0.01),
+              }
+            });
+            if (mounted && rows.length) { setLiveData(rows); return; }
+          }
+        } catch {}
+        // Fallback direct Firestore
         const { db } = await import('../lib/firebase')
         const { collection, query, orderBy, limit, getDocs } = await import('firebase/firestore')
         const q = query(collection(db, 'trades'), orderBy('timestamp', 'desc'), limit(80))
@@ -234,12 +261,19 @@ function VerifiedLiveCard() {
     let mounted = true
     async function load() {
       try {
-        const { db } = await import('../lib/firebase')
-        const { collection, query, orderBy, limit, getDocs } = await import('firebase/firestore')
-        const q = query(collection(db, 'trades'), orderBy('timestamp', 'desc'), limit(80))
-        const snap = await getDocs(q)
-        const rows = snap.docs.map(d => ({ id: d.id, v: d.data() as any }))
-          .map(({ id, v }) => ({
+        // Use web app public API (bypasses Firestore rules) — same data as /proof in web app
+        const base = process.env.NEXT_PUBLIC_L2_WEB_API || 'https://l2signal-web.vercel.app';
+        const [rDemo, rProp] = await Promise.all([
+          fetch(`${base}/api/trades?account=demo&limit=80`, { cache: 'no-store' }).then(r=>r.json()).catch(()=>null),
+          fetch(`${base}/api/trades?account=prop&limit=80`, { cache: 'no-store' }).then(r=>r.json()).catch(()=>null),
+        ]);
+        const all: any[] = [];
+        if (rDemo?.success && Array.isArray(rDemo.trades)) all.push(...rDemo.trades.map((v:any)=>({ v, id: v.id||v.tradeId })));
+        if (rProp?.success && Array.isArray(rProp.trades)) all.push(...rProp.trades.map((v:any)=>({ v, id: v.id||v.tradeId })));
+        // Fallback to direct Firestore if API fails (local dev)
+        let rows: any[] = [];
+        if (all.length) {
+          rows = all.map(({ id, v }) => ({
             id,
             date: (v.timestamp?.toDate ? v.timestamp.toDate().toISOString().slice(0,10) : String(v.timestamp||'').slice(0,10)) || '',
             result: v.result || 'win',
@@ -252,9 +286,31 @@ function VerifiedLiveCard() {
             lot: Number(v.entrySize||0.01),
             direction: v.direction || (v.trend === 'UP' ? 'LONG' : 'SHORT'),
             account: v.accountId || 'demo',
-          }))
-          .sort((a,b) => b.date.localeCompare(a.date))
-          .slice(0, 40)
+          })).sort((a,b) => b.date.localeCompare(a.date)).slice(0, 40);
+        } else {
+          // Fallback: try direct Firestore (requires rules allow read)
+          try {
+            const { db } = await import('../lib/firebase')
+            const { collection, query, orderBy, limit, getDocs } = await import('firebase/firestore')
+            const q = query(collection(db, 'trades'), orderBy('timestamp', 'desc'), limit(80))
+            const snap = await getDocs(q)
+            rows = snap.docs.map(d => ({ id: d.id, v: d.data() as any }))
+              .map(({ id, v }) => ({
+                id,
+                date: (v.timestamp?.toDate ? v.timestamp.toDate().toISOString().slice(0,10) : String(v.timestamp||'').slice(0,10)) || '',
+                result: v.result || 'win',
+                rr: Number(v.riskRewardRatio || (v.stopLoss ? Math.abs((v.takeProfit||v.exitPrice)-v.entryPrice)/Math.abs(v.entryPrice-v.stopLoss) : 0)),
+                pnl: Number(v.pnl||0),
+                entry: Number(v.entryPrice||0),
+                exit: Number(v.exitPrice||0),
+                sl: Number(v.stopLoss||0),
+                tp: Number(v.takeProfit||0),
+                lot: Number(v.entrySize||0.01),
+                direction: v.direction || (v.trend === 'UP' ? 'LONG' : 'SHORT'),
+                account: v.accountId || 'demo',
+              })).sort((a,b) => b.date.localeCompare(a.date)).slice(0, 40);
+          } catch {}
+        }
         if (mounted) { setTrades(rows); setLoading(false) }
       } catch { if (mounted) setLoading(false) }
     }
@@ -318,10 +374,27 @@ function PropWall() {
     let mounted = true
     async function load() {
       try {
+        // Prefer web app API (bypasses Firestore rules) — same as VerifiedLiveCard
+        const base = process.env.NEXT_PUBLIC_L2_WEB_API || 'https://l2signal-web.vercel.app';
+        try {
+          const r = await fetch(`${base}/api/trades?account=prop&limit=80`, { cache: 'no-store' }).then(x=>x.json()).catch(()=>null);
+          if (r?.success && Array.isArray(r.trades) && r.trades.length) {
+            const rows = r.trades.slice(0,30).map((v:any) => {
+              const entry = Number(v.entryPrice || 0)
+              const exit = Number(v.exitPrice || 0)
+              const sl = Number(v.stopLoss || 0)
+              const risk = Math.abs(entry - sl) || 1
+              const isLong = (v.direction || 'LONG') === 'LONG'
+              const rr = sl ? (isLong ? (exit - entry) / risk : (entry - exit) / risk) : Number(v.riskRewardRatio || 0)
+              return { id: v.id||v.tradeId, date: (v.timestamp?.toDate ? v.timestamp.toDate().toISOString().slice(0,10) : String(v.timestamp||'').slice(0,10)) || '', result: v.result || (rr>0?'win':'loss'), rr, pnl: Number(v.pnl||0), caption: `${v.direction || ''} ${entry.toFixed(2)} → ${exit.toFixed(2)}`, entry, exit, sl, tp: Number(v.takeProfit||0), lot: Number(v.entrySize||0.04) }
+            });
+            if (mounted && rows.length) { setTrades(rows); setLoading(false); return; }
+          }
+        } catch {}
+        // Fallback direct Firestore (local dev)
         const { db } = await import('../lib/firebase')
         const { collection, query, orderBy, limit, getDocs } = await import('firebase/firestore')
         try {
-          // no composite index — fetch then filter in memory
           const q = query(collection(db, 'trades'), orderBy('timestamp', 'desc'), limit(80))
           const snap = await getDocs(q)
           const rows = snap.docs.map(d => ({ id: d.id, v: d.data() as any }))

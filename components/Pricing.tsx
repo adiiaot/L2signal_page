@@ -3,7 +3,7 @@ export default function Pricing() {
     <section id="pricing" className="max-w-6xl mx-auto px-4 py-6 scroll-reveal">
       <div className="card text-center max-w-2xl mx-auto">
         <p className="text-[11px] tracking-[0.16em] text-accent-gold uppercase">Access</p>
-        <h3 className="text-lg font-bold text-text-primary mt-1">Private signals — pricing in Telegram</h3>
+        <h3 className="text-lg font-bold text-text-primary mt-1">Need Signals To Scale Your Capital?</h3>
         <p className="text-xs text-text-muted mt-2 max-w-xl mx-auto">
           We post pricing and availability in the channel. Join free, see the ledger, then decide. No pressure, no DMs.
         </p>
