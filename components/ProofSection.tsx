@@ -227,6 +227,90 @@ function LedgerCarousel({ data, showX, liveAccount }: { data: typeof demoTweets;
   )
 }
 
+function VerifiedLiveCard() {
+  const [trades, setTrades] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    let mounted = true
+    async function load() {
+      try {
+        const { db } = await import('../lib/firebase')
+        const { collection, query, orderBy, limit, getDocs } = await import('firebase/firestore')
+        const q = query(collection(db, 'trades'), orderBy('timestamp', 'desc'), limit(80))
+        const snap = await getDocs(q)
+        const rows = snap.docs.map(d => ({ id: d.id, v: d.data() as any }))
+          .map(({ id, v }) => ({
+            id,
+            date: (v.timestamp?.toDate ? v.timestamp.toDate().toISOString().slice(0,10) : String(v.timestamp||'').slice(0,10)) || '',
+            result: v.result || 'win',
+            rr: Number(v.riskRewardRatio || (v.stopLoss ? Math.abs((v.takeProfit||v.exitPrice)-v.entryPrice)/Math.abs(v.entryPrice-v.stopLoss) : 0)),
+            pnl: Number(v.pnl||0),
+            entry: Number(v.entryPrice||0),
+            exit: Number(v.exitPrice||0),
+            sl: Number(v.stopLoss||0),
+            tp: Number(v.takeProfit||0),
+            lot: Number(v.entrySize||0.01),
+            direction: v.direction || (v.trend === 'UP' ? 'LONG' : 'SHORT'),
+            account: v.accountId || 'demo',
+          }))
+          .sort((a,b) => b.date.localeCompare(a.date))
+          .slice(0, 40)
+        if (mounted) { setTrades(rows); setLoading(false) }
+      } catch { if (mounted) setLoading(false) }
+    }
+    load()
+    const id = setInterval(load, 30000)
+    return () => { mounted = false; clearInterval(id) }
+  }, [])
+  if (loading) return <div className="py-6 text-center text-xs font-mono text-text-muted">Loading live verified trades…</div>
+  if (!trades.length) return <div className="py-6 text-center text-xs text-text-muted">No verified trades yet — log one in the web app and it appears here live.</div>
+  const wins = trades.filter(t => t.result === 'win' || t.result === 'partial_win').length
+  const losses = trades.filter(t => t.result === 'loss').length
+  const totalR = trades.reduce((a,t)=> a + (t.rr>0 ? t.rr : t.result==='loss' ? -Math.abs(t.rr||1) : t.rr), 0)
+  const wr = trades.length ? Math.round((wins/trades.length)*1000)/10 : 0
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-bold flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-status-win animate-pulse" /> Verified L2 Signals <span className="text-[10px] font-normal px-2 py-0.5 rounded-full bg-status-win/10 text-status-win border border-status-win/15">LIVE TRACKING</span></h3>
+        <span className="text-[11px] font-mono text-text-muted">{trades.length} trades · {wins}W {losses}L · {wr}% WR · {totalR>0?'+':''}{totalR.toFixed(1)}R</span>
+      </div>
+      <div className="hidden md:block overflow-x-auto no-scrollbar">
+        <div className="flex gap-3 pb-1">
+          {trades.map(t => {
+            const isWin = t.rr > 0
+            const accent = isWin ? 'var(--status-win)' : t.result === 'loss' ? 'var(--status-loss)' : 'var(--accent-gold)'
+            return (
+              <div key={t.id} className="min-w-[260px] max-w-[260px] rounded-xl border p-3" style={{ background: 'rgb(var(--surface-overlay-rgb))', borderColor: 'var(--glass-border)' }}>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: isWin?'rgba(34,197,94,0.12)':'rgba(239,68,68,0.12)', color: accent }}>{String(t.result).toUpperCase()}</span>
+                  <span className="text-[10px] font-mono text-text-muted">{t.date} · {t.account.toUpperCase()} · {t.direction}</span>
+                </div>
+                <p className="text-xs font-mono mt-2">{Number(t.entry).toFixed(2)} → {Number(t.exit).toFixed(2)} · {Number(t.lot).toFixed(2)} lot</p>
+                <div className="flex items-end justify-between mt-2">
+                  <div><p className="text-[10px] tracking-widest text-text-muted uppercase">R</p><p className="text-lg font-bold font-mono" style={{ color: accent }}>{t.rr>0?'+':''}{Number(t.rr).toFixed(2)}R</p></div>
+                  <div className="text-right"><p className="text-xs font-mono" style={{ color: t.pnl>=0?'var(--status-win)':'var(--status-loss)' }}>{t.pnl>=0?'+':''}${Number(t.pnl).toFixed(2)}</p><p className="text-[10px] font-mono text-text-muted">SL {Number(t.sl).toFixed(2)} · TP {Number(t.tp).toFixed(2)}</p></div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+      <div className="md:hidden space-y-2 max-h-[380px] overflow-y-auto pr-1">
+        {trades.map(t => (
+          <div key={t.id} className="rounded-xl border p-3 flex items-center justify-between" style={{ background: 'rgb(var(--surface-overlay-rgb))', borderColor: 'var(--glass-border)' }}>
+            <div>
+              <p className="text-xs font-bold" style={{ color: t.rr>0?'var(--status-win)':'var(--status-loss)' }}>{String(t.result).toUpperCase()} · {t.direction} · {Number(t.rr).toFixed(2)}R</p>
+              <p className="text-[11px] font-mono text-text-muted">{t.date} · {Number(t.entry).toFixed(2)} → {Number(t.exit).toFixed(2)} · {Number(t.lot).toFixed(2)} lot</p>
+            </div>
+            <span className="text-xs font-mono" style={{ color: t.pnl>=0?'var(--status-win)':'var(--status-loss)' }}>{t.pnl>=0?'+':''}${Number(t.pnl).toFixed(2)}</span>
+          </div>
+        ))}
+      </div>
+      <p className="text-[10px] font-mono text-text-muted text-center">Live from Firestore — updates within 30s of logging in the web app. No X/Tweet needed.</p>
+    </div>
+  )
+}
+
 function PropWall() {
   const [trades, setTrades] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -304,11 +388,12 @@ export default function ProofSection() {
         {tab === 'demo' ? (
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-[10px] font-mono text-text-muted">
-              <span className="px-2 py-1 rounded bg-accent-gold/10 text-accent-gold border border-accent-gold/15">$100 → $1,007.41 · 37D</span>
-              <span className="hidden sm:inline">· live 31 trades · 1–2% risk · public on X</span>
+              <span className="px-2 py-1 rounded bg-accent-gold/10 text-accent-gold border border-accent-gold/15">$100 → Live · auto-synced</span>
+              <span className="hidden sm:inline">· 1–2% risk · verified Firestore</span>
+              <span className="ml-auto px-2 py-0.5 rounded-full bg-status-win/10 text-status-win border border-status-win/15 text-[9px] font-bold tracking-widest">LIVE TRACKING</span>
             </div>
-            <LedgerCarousel data={demoTweets} showX liveAccount="demo" />
-            <p className="text-[10px] font-mono text-text-muted text-center">Auto-scrolls every 5s · swipe or use arrows · RR highlighted so higher size scales profit</p>
+            <LedgerCarousel data={demoTweets} showX={false} liveAccount="demo" />
+            <p className="text-[10px] font-mono text-text-muted text-center">Auto-syncs from your Firestore trades — no X posts needed · swipe or use arrows</p>
           </div>
         ) : (
           <PropWall />
@@ -317,6 +402,10 @@ export default function ProofSection() {
         <div className="mt-4 flex justify-center">
           <a href="https://t.me/l2signals" target="_blank" rel="noopener" className="text-xs font-medium px-5 py-2 rounded-full border hover:border-accent-gold transition" style={{ borderColor: 'var(--glass-border)' }}>Join Channel to see next trades →</a>
         </div>
+      </div>
+
+      <div className="card p-4 md:p-5">
+        <VerifiedLiveCard />
       </div>
     </section>
   )

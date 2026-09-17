@@ -22,14 +22,14 @@ export default function Hero() {
             <span className="font-mono font-light tracking-tight" style={{ color: 'var(--accent-gold)' }}>No guesswork.</span>
           </h1>
           <p className="text-sm md:text-[15px] leading-relaxed text-white/80 max-w-2xl mx-auto">
-            L2 Signals is a systematic XAU/USD intraday product — 3 complementary strategies, hybrid <span className="text-white font-medium">limit + stop</span> to 21:00 UTC. Backtested on real Dukascopy, forward validated live. Every trade, every R.
+            L2 Signals is a Systematic Intraday Signal Service — 3 Complementary Strategies, Hybrid <span className="text-white font-medium">Execution </span> Model. Backtested on real market data, forward validated live. Every trade, every R.
           </p>
           <div className="flex flex-wrap justify-center gap-3 pt-1">
             <a href="https://t.me/l2signals" target="_blank" rel="noopener" className="inline-flex items-center justify-center rounded-full bg-white text-black text-xs font-semibold px-6 py-2.5 hover:bg-white/90 transition">
               Join Our Channel on Telegram
             </a>
             <a href="#proof" className="inline-flex items-center justify-center rounded-full border text-xs font-medium px-6 py-2.5 backdrop-blur" style={{ borderColor: 'rgba(255,255,255,0.22)', color: '#fff', background: 'rgba(255,255,255,0.06)' }}>
-              View Trade Ledger
+              View Our Trade Ledger
             </a>
           </div>
           <div className="flex flex-wrap justify-center pt-2 font-mono text-[10px]">
