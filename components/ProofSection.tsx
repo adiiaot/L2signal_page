@@ -68,7 +68,7 @@ function LedgerCarousel({ data, showX, liveAccount }: { data: typeof demoTweets;
     let mounted = true
     ;(async () => {
       try {
-        const base = process.env.NEXT_PUBLIC_L2_WEB_API || 'https://l2signal-web.vercel.app';
+        const base = process.env.NEXT_PUBLIC_L2_WEB_API || 'https://l2signal-web-six.vercel.app';
         try {
           const r = await fetch(`${base}/api/trades?account=${liveAccount}&limit=80`, { cache: 'no-store' }).then(x=>x.json()).catch(()=>null);
           if (r?.success && Array.isArray(r.trades) && r.trades.length) {
@@ -262,7 +262,7 @@ function VerifiedLiveCard() {
     async function load() {
       try {
         // Use web app public API (bypasses Firestore rules) — same data as /proof in web app
-        const base = process.env.NEXT_PUBLIC_L2_WEB_API || 'https://l2signal-web.vercel.app';
+        const base = process.env.NEXT_PUBLIC_L2_WEB_API || 'https://l2signal-web-six.vercel.app';
         const [rDemo, rProp] = await Promise.all([
           fetch(`${base}/api/trades?account=demo&limit=80`, { cache: 'no-store' }).then(r=>r.json()).catch(()=>null),
           fetch(`${base}/api/trades?account=prop&limit=80`, { cache: 'no-store' }).then(r=>r.json()).catch(()=>null),
@@ -375,7 +375,7 @@ function PropWall() {
     async function load() {
       try {
         // Prefer web app API (bypasses Firestore rules) — same as VerifiedLiveCard
-        const base = process.env.NEXT_PUBLIC_L2_WEB_API || 'https://l2signal-web.vercel.app';
+        const base = process.env.NEXT_PUBLIC_L2_WEB_API || 'https://l2signal-web-six.vercel.app';
         try {
           const r = await fetch(`${base}/api/trades?account=prop&limit=80`, { cache: 'no-store' }).then(x=>x.json()).catch(()=>null);
           if (r?.success && Array.isArray(r.trades) && r.trades.length) {
